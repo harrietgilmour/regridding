@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore')
 # Function that will check the number of arguements passed
 def check_no_args(args):
     """ Check the number of arguements passed"""
-    if len(args) != 2:
+    if len(args) != 3:
         print("Incorrect number of arguements")
         print("Usage: python regrid_mask.py <MASK_FILE> <TB_FILE>")
         print("Example: python feature_detection.py /data/users/hgilmour/initial_tracks/tobac_initial_tracks/segmentation/segmentation_yearly_2005.nc /data/users/hgilmour/tb/2005/tb_2005.nc")
@@ -42,7 +42,7 @@ def open_datasets(mask_file, tb_file):
 
     #tb = iris.load_cube(tb_file)
     tb = iris.load(tb_file) # load all the cubes in the input file
-    tb = tb[1]
+    tb = tb[0]
 
     return mask, tb
 
@@ -55,7 +55,7 @@ def create_blank_coord_cube(mask, mask_data, tb):
     nt,nx,ny = mask_data.shape
     subset_new = np.zeros((nt,nx,ny))
 
-    TimeCoords, LatCoords, LonCoords = mask.coord('time'), tb.coord('projection_y_coordinate'), tb.coord('projection_x_coordinate') 
+    TimeCoords, LatCoords, LonCoords = mask.coord('time'), tb.coord('latitude'), tb.coord('longitude') 
     vrbcoords=[(TimeCoords, 0), (LatCoords, 1), (LonCoords, 2)]
 
     ## Instantiate new cube 
@@ -103,8 +103,8 @@ def regrid(mask_coords, subset_imerg_coords):
 
 def main():
     #First extract the arguments:
-    mask_file = str(sys.argv[0])
-    tb_file = str(sys.argv[1])
+    mask_file = str(sys.argv[1])
+    tb_file = str(sys.argv[2])
 
     # We want to extract the month and year from the tb_file path
     # An example of the path is:
@@ -134,6 +134,10 @@ def main():
     mask, tb = open_datasets(mask_file, tb_file)
     print('datasets opened')
 
+    # Split the mask file into 2 halves to stop memory error
+    mask = mask[4380:,:,:]
+    tb = tb[4380:,:,:]
+
     # extract the data from the mask file to eventualy put into the new empty cube
     mask_data = mask.data
 
@@ -145,7 +149,7 @@ def main():
     newcube.data = mask.data
 
     # Create bounds and a coord system for the cube
-    mask_coords = guesslatlonbounds_projection(newcube)
+    mask_coords = guesslatlonbounds_latlon(newcube)
 
     # Load imerg file (this reference file stays the same for each time this script is run)
     imerg_file = '/scratch/hgilmour/obs/precip/precip_2001.nc'
@@ -163,13 +167,19 @@ def main():
 
     # Regrid the mask file to the IMERG 10km grid
     regridded_mask = regrid(mask_coords, subset_imerg_coords)
+    print('Re-gridding complete')
 
     # Save the file
-    savefile = '/data/users/hgilmour/initial_tracks/tobac_initial_tracks/segmentation/regridded/regridded_segmentation_yearly_{}.nc'.format(year)
+    savefile = '/project/cssp_brazil/mcs_tracking_HG/segmentation_obs/regridded/half2_regridded_segmentation_yearly_{}.nc'.format(year)
 
     iris.save(regridded_mask, savefile)
+    print('File saved')
 
-    
+#Run the main function
+if __name__ == "__main__":
+    main()
+
+
 
 
 
